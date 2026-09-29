@@ -57,7 +57,7 @@ pip install -r requirements.txt
 
 Run everything from the main project folder, because the file paths are relative.
 
-## uses the already trained model:
+## Run already trained model:
 
 ```
 python predict_own_model.py
