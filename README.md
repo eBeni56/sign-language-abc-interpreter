@@ -44,6 +44,11 @@ Only the dense layers are used for the sign language recognition. The convolutio
 
 You need Python 3.12 (mediapipe is picky about the Python version)
 
+```
+python3.12 -m venv .venv
+.venv\Scripts\activate
+```
+
 Install the packages:
 
 ```
