@@ -1,5 +1,4 @@
 import mediapipe as mp
-from mediapipe.tasks.python import vision
 from mediapipe.tasks.python.vision import HandLandmarker, HandLandmarkerOptions, RunningMode
 import cv2
 import pickle
@@ -43,10 +42,10 @@ def draw_landmarks(frame, hand_landmarks):
     ]   
 
     for landmark in hand_landmarks:
-        x = int(landmark.x * w)   # normalizalva vannak alapbol
+        x = int(landmark.x * w)   # they're normalized by default
         y = int(landmark.y * h)
 
-        cv2.circle(frame, (x, y), 4, (0, 255, 0), -1)   # -1 hogy ne csak korvanalat rajzoljon, hanem toltse ki is a teljes kort 
+        cv2.circle(frame, (x, y), 4, (0, 255, 0), -1)   # -1 so it doesn't just draw the outline of the circle, but fills the whole circle too
 
 
     for start_idx, end_idx in connections:
@@ -76,7 +75,10 @@ with open(MODEL_PATH, "rb") as f:
         cap = cv2.VideoCapture(0)   
 
         while True:
-            _, frame = cap.read()
+            success, frame = cap.read()
+
+            if not success:
+                break
 
             frame = cv2.flip(frame, 1)
 
@@ -96,7 +98,7 @@ with open(MODEL_PATH, "rb") as f:
 
                 coords = get_coords_as_list(hand_landmarks)
 
-                nn.feed_forward(np.array(coords))
+                nn.feed_forward(np.array(coords), False)
 
                 prediction = get_prediction(nn)
     
@@ -105,4 +107,8 @@ with open(MODEL_PATH, "rb") as f:
                 cv2.putText(frame, f"Prediction: {letter}", (10, 50), cv2.FONT_HERSHEY_COMPLEX, 0.7, (0, 0, 0), 2)
 
             cv2.imshow("Camera", frame)
-            cv2.waitKey(1)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+
+        cap.release()
+        cv2.destroyAllWindows()

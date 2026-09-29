@@ -1,5 +1,4 @@
 import numpy as np
-import optimizer as op
 from activation_function import ActivationFunction
 
 class DenseLayer:
@@ -27,7 +26,7 @@ class DenseLayer:
 
            case "he_uniform":
                low = -np.sqrt(6 / input_size)
-               high = np.sqrt(6 / output_size)
+               high = np.sqrt(6 / input_size)
                self.weights = np.random.uniform(low = low, high = high,
                        size = (input_size, output_size))
 
@@ -66,26 +65,26 @@ class DenseLayer:
 
         #∂Loss/∂weight = ∂Loss/∂before_activation * ∂before_activation/∂weight
         #before_activation = x1*w1 + x2*w2 + b =>  
-        # => ∂before_activation/∂w1 = x1 (w1 alapbol a weight)
+        # => ∂before_activation/∂w1 = x1 (w1 is basically the weight)
         #∂Loss/∂weight = input * ∂Loss/∂before_activation
-        #transzponalni kell mivel: 
+        #we have to transpose because:
         # inputs shape:(batch_size, input_neurons)
         # d_before_activation shape: (batch_size, output_neurons)
         # weights shape: (input_neurons, output_neurons)
         self.weight_gradients = self.inputs.T @ d_before_activation
 
         #∂Loss/∂b = ∂Loss/∂before_activation * ∂before_activation/∂b
-        #∂before_activation/∂b = 1, mivel: x1*w1 + x2*w2 + b 
-        #osszeadjuk az osszes peldara vonatkozo hibat 
-        #(oszloponkent adjuk ossze, es megtartjuk a dimenziot is hogy ugyan olyan formaju legyen mint a bias)
-        #nem zavar be, hogy csak egy uj mutato kerul a matrixra, mert nem modosul egyik sem
+        #∂before_activation/∂b = 1, because: x1*w1 + x2*w2 + b
+        #we add up the error of all the examples
+        #(we add them up column by column, and we keep the dimension too so it has the same shape as the bias)
+        #it's not a problem that only a new pointer is put on the matrix, because neither of them gets modified
         self.bias_gradients = d_before_activation
 
-        #felepitjuk az elozo layer hiba jelet is
+        #we build the error signal of the previous layer too
         #∂Loss/∂x1 = ∂Loss/∂before_activation * ∂before_activation/∂x1
-        #mivel before_activation = x1*w1 + x2*w2 + b =>
+        #since before_activation = x1*w1 + x2*w2 + b =>
         #=> ∂before_activation/∂x1 = w1
-        #transponalas oka hasonlo
+        #the reason for the transposing is similar
         d_inputs = d_before_activation @ self.weights.T
 
         return d_inputs
@@ -113,8 +112,8 @@ class DropoutLayer:
 
 class ConvolutionalLayer:
     def __init__(self, input_channels: int, filter_count: int, filter_size: tuple[int, int], stride: int, activation_function: ActivationFunction, keep_size: bool = True, filter_initialization_method: str = None):
-        self.input_channels = input_channels #milyen alaku inputra keszuljon pl grayscale eseten 1, RGB eseten 3
-        self.filter_count = filter_count    #hany filtert akarunk (egy layerben szokas tobb filtert hasznalni)
+        self.input_channels = input_channels #what shape of input it's made for, e.g. 1 for grayscale, 3 for RGB
+        self.filter_count = filter_count    #how many filters we want (it's usual to use multiple filters in one layer)
         self.filter_size = filter_size
         self.filter_shape = (filter_count, filter_size[0], filter_size[1], input_channels)
 
@@ -125,12 +124,12 @@ class ConvolutionalLayer:
 
         if keep_size:
             if stride != 1:
-                raise ValueError("keep_size=True so please select stride = 1")  #csak stride 1 eseten szoktak paddingelni. 
-                #mas esetben matematikailag kijon de tul koltseges. altalaban stride > 1 eseten az is a cel, hogy kisebb legyen az output
+                raise ValueError("keep_size=True so please select stride = 1")  #we usually only pad with stride 1.
+                #in other cases it works out mathematically but it's too expensive. usually with stride > 1 the goal is also to make the output smaller
 
             if filter_size[0] % 2 == 0 or filter_size[1] % 2 == 0:
                 raise ValueError("keep_size=True needs odd filter dimensions")
-                #hogy a szele ra tudjon illeszkedni a kozepere
+                #so the edge can fit onto the middle
 
             self.padding_height = filter_size[0] // 2
             self.padding_width = filter_size[1] // 2
@@ -138,7 +137,7 @@ class ConvolutionalLayer:
             self.padding_height = 0
             self.padding_width = 0
 
-        #megjegyzes, a filter neve maradt weights, mert az optimezerben weights-kent hivatkozunk ra
+        #note, the filter's name stayed weights, because we refer to it as weights in the optimizer
         self.inputs = None
         self.before_activation = None
         self.after_activation = None
@@ -148,8 +147,8 @@ class ConvolutionalLayer:
         self.biases = np.zeros(shape=filter_count)
         self.weights = None
         
-        #input_size = filter_wifth * filter_height * (hany ertek tartozik a kephez pl rgbnel = 3)
-        #hiaba rgb a kep, a filter is csak ugyan ugy no, mivel dot product sumb-ol fog erteket vissza adni
+        #input_size = filter_wifth * filter_height * (how many values belong to the image e.g. 3 for rgb)
+        #even though the image is rgb, the filter also grows the same way, since the dot product sum will return one value
         #output size = filter_wifth * filter_height * filter_count
         match filter_initialization_method:
            case "he_normal":
@@ -179,49 +178,47 @@ class ConvolutionalLayer:
     def initialize_optimizer(self, optimizer_from_nn):
         self.optimizer = optimizer_from_nn
 
-    #inputs.shape == (batch_size, height, width, channels) ez az input alakja
-    #lenyeg: kivagunk egy kicsi kockat, melynek szelessege es magassaga = a filter szelessege es magassagaval
-    #es a 3. dimenzioja pedig h hany chanel van (pl gray scale 1 es rgb 3)
-    #majd ezt dot producttal ossze szorozzuk a filterunkkel, ossze adjuk az ertekeket (hogy megkapjuk
-    # a teljes filter mennyire illeszkedik az adott reszre) + bias
-    #ezt elvegezzuk minden resszel amivel lehet
+    #inputs.shape == (batch_size, height, width, channels) this is the shape of the input
+    #the point: we cut out a small cube, whose width and height = the width and height of the filter
+    #and its 3rd dimension is how many channels there are (e.g. gray scale 1 and rgb 3)
+    #then we multiply this with our filter using dot product, add up the values (so we get
+    # how well the whole filter matches that part) + bias
+    #we do this with every part we can
     def convolve(self, inputs):
         inputs = np.pad(inputs,
-            ((0, 0), #a batch eleje es vege nem kap nullat
-             (self.padding_height, self.padding_height), #a magassag kap nullat az elejere es a vegere is
-             (self.padding_width, self.padding_width), #a szelesseg is mint magassag
-             (0, 0)),  #a channel eleje es vege nem kap nullas
-             mode="constant")   #zerosokkal toltse fel
+            ((0, 0), #the start and end of the batch don't get zeros
+             (self.padding_height, self.padding_height), #the height gets zeros at the start and at the end too
+             (self.padding_width, self.padding_width), #the width too, like the height
+             (0, 0)),  #the start and end of the channel don't get zeros
+             mode="constant")   #fill it up with zeros
 
-        #az output meretei az hogy hany lepest tud megtenni az adott tengelyen a filter
+        #the size of the output is how many steps the filter can take on that axis
         output_height = (inputs.shape[1] - self.filter_size[0]) // self.stride + 1
         output_width = (inputs.shape[2] - self.filter_size[1]) // self.stride + 1
 
         output = np.zeros(shape=(inputs.shape[0], output_height, output_width, self.filter_count))
 
-        for sample_index in range(inputs.shape[0]): #batchek (de amugy ezert kerdeztem, 
-            #hogy nem e lenne erdemesebb atirni az egeszet ugy, hogy -1 dimenzio, 
-            #mert pl itt sem hasznaljuk ki mert ez is mindig 1et kap mint batch)
+        for sample_index in range(inputs.shape[0]): #batches
             for y in range(output_height):
                 for x in range(output_width):
-                    #honnan kezdunk
+                    #where we start from
                     y_start = y * self.stride
                     x_start = x * self.stride
 
-                    #kivagjuk az inputbol a megfelelo reszt, amire szamolunk a filterrel
+                    #we cut out the right part from the input, that we calculate with the filter
                     input_part = inputs[
-                        sample_index,   #hanyadik batch
-                        y_start : y_start + self.filter_size[0],    #honnan hova
+                        sample_index,   #which batch
+                        y_start : y_start + self.filter_size[0],    #from where to where
                         x_start : x_start + self.filter_size[1],
-                        :   #osszes channel
+                        :   #all channels
                     ]
                     
                     #output.shape = (batch_size, output_height, output_width, filter_count) 
-                    #es a filter count lesz a kovetkezo layer chanel erteke
-                    #numpy broadcastinggal megoldja es lekezzeli egyszerre a tobb filtert
-                    #az output megfelelo resze = [hanyadik batch, ]
-                    output[sample_index, y, x, :] = (   #a megfelelo poziciora lekerjuk az osszes filter eredmenyet
-                        np.sum(input_part * self.weights, axis=(1, 2, 3))   #osszeadjuk a dot productokat magassag, szelesseg es csatornak menten
+                    #and the filter count will be the channel value of the next layer
+                    #numpy solves it with broadcasting and handles multiple filters at once
+                    #the right part of the output = [which batch, ]
+                    output[sample_index, y, x, :] = (   #we get the results of all the filters at the right position
+                        np.sum(input_part * self.weights, axis=(1, 2, 3))   #we add up the dot products along height, width and channels
                         + self.biases
                     )
 
@@ -230,7 +227,7 @@ class ConvolutionalLayer:
     def forward(self, inputs):
         self.inputs = inputs
 
-        output = self.convolve(inputs)  #a forward ugyan az mint a densenel, csak itt a filterrel kell vegig jarni stb.
+        output = self.convolve(inputs)  #the forward is the same as at the dense, only here we have to go through with the filter etc.
         activated = self.activation.f(output)
 
         self.before_activation = output
@@ -239,7 +236,7 @@ class ConvolutionalLayer:
         return activated
     
     def backward(self, d_after_activation):
-        #mennyire befolyasolja az activacio elotti az eredmenyt
+        #how much does the one before the activation influence the result
         d_before_activation = d_after_activation * self.activation.df(self.before_activation)
 
         padded_inputs = np.pad(self.inputs,
@@ -247,9 +244,9 @@ class ConvolutionalLayer:
              (self.padding_height, self.padding_height),
              (self.padding_width, self.padding_width),
              (0, 0)),
-            mode="constant")    #padding mint a forwardnal
+            mode="constant")    #padding like at the forward
 
-        d_padded_inputs = np.zeros_like(padded_inputs)  #ide gyujtjuk az inputra valo gradienseket
+        d_padded_inputs = np.zeros_like(padded_inputs)  #we collect the gradients on the input here
         self.weight_gradients = np.zeros_like(self.weights)
         self.bias_gradients = np.zeros_like(self.biases)
 
@@ -264,11 +261,11 @@ class ConvolutionalLayer:
                         y_start : y_start + self.filter_size[0],
                         x_start : x_start + self.filter_size[1],
                         :
-                    ]   #kiszurjuk az inputbol azt amit kepvisel az adott output pozicio
+                    ]   #we filter out from the input what the given output position represents
 
-                    for filter_index in range(self.filter_count):   #rendre az osszes filterre
+                    for filter_index in range(self.filter_count):   #one by one for all the filters
                         #self.weight_gradients = self.inputs.T @ d_before_activation
-                        #ugyan ez az otlet, csak itt sok kicsi reszre amit elobb ki kell szurni
+                        #same idea, only here for many small parts that we have to filter out first
                         self.weight_gradients[filter_index] += (input_part * d_before_activation[sample_index, y, x, filter_index])
                         self.bias_gradients[filter_index] += (d_before_activation[sample_index, y, x, filter_index])
 
@@ -280,13 +277,13 @@ class ConvolutionalLayer:
                         ] += (
                             self.weights[filter_index]
                             * d_before_activation[sample_index, y, x, filter_index]
-                        )   #felepitjuk a teljes padded input mennyire befolyasolta az eredmenyt
+                        )   #we build up how much the whole padded input influenced the result
 
-        height_slice = slice(None)  #megegyezik a ":"-el
+        height_slice = slice(None)  #same as ":"
         width_slice = slice(None)
 
-        #megj: azert hasznaljuk igy, mert slice-al a legbiztonsagosabb, 
-        # es egyszeru kezelni, azt is ha nem ugyanakkor 0 vagy nem 0 a ket padding
+        #note: we use it like this because with slice it's the safest
+        # and simple to handle, even when the two paddings aren't 0 or non-0 at the same time
         if self.padding_height != 0:
             height_slice = slice(self.padding_height, -self.padding_height)
 
@@ -298,25 +295,25 @@ class ConvolutionalLayer:
         return d_inputs
         
 
-#szerepe a conv. layer 4d adatat 2d-be alakitani (hogy meg tudja kapni a dense layer)
+#its role is to turn the 4d data of the conv. layer into 2d (so the dense layer can receive it)
 class FlattenLayer:
     def __init__(self):
-        self.inputs = None  #elmentjuk az inputot, hogy majd tudjuk hasznalni backpropnal
+        self.inputs = None  #we save the input, so we can use it in backprop
         self.weight_gradients = np.array(0)
-        self.bias_gradients = np.array(0)   #dummy gradients az nn train-je miatt
+        self.bias_gradients = np.array(0)   #dummy gradients because of the nn's train
         self.optimizer = None
 
     def forward(self, inputs):
         self.inputs = inputs
-        return inputs.reshape(inputs.shape[0], -1)  #batch size marad, 
-        #1 jelentese: szamoldd ki automatikusan ide mekkora dimenzio kell, hogy az osszes elem megmaradjon
+        return inputs.reshape(inputs.shape[0], -1)  #batch size stays,
+        #the meaning of -1: calculate automatically how big the dimension needs to be here, so all the elements are kept
 
     def backward(self, d_after_activation):
-        return d_after_activation.reshape(self.inputs.shape)    #forward inverze, felhasznaljuk az eredeti shapet
+        return d_after_activation.reshape(self.inputs.shape)    #inverse of the forward, we use the original shape
 
 class MaxPoolLayer:
     def __init__(self, pool_size: tuple[int, int] = (2, 2), stride: int = 2):
-        self.pool_size = pool_size  #mekkora "ablakbol" tartjuk meg csak a maximum erteket
+        self.pool_size = pool_size  #from how big a "window" we only keep the maximum value
         self.stride = stride
         self.inputs = None
         self.weight_gradients = np.array(0)
@@ -330,7 +327,7 @@ class MaxPoolLayer:
         output_width = (inputs.shape[2] - self.pool_size[1]) // self.stride + 1
 
         output = np.zeros(shape=(inputs.shape[0], output_height, output_width, inputs.shape[3]))    
-        #ugyan az a logika mint a convolve-ban
+        #same logic as in convolve
 
         for sample_index in range(inputs.shape[0]):
             for y in range(output_height):
@@ -340,13 +337,13 @@ class MaxPoolLayer:
                         y * self.stride : y * self.stride + self.pool_size[0],
                         x * self.stride : x * self.stride + self.pool_size[1],
                         :
-                    ]   #kiszurjuk az adott reszt
-                    output[sample_index, y, x, :] = np.max(input_part, axis=(0, 1)) #megtartjuk csak a maximumot
-                    #(teljes maximum = max(sor maximum, oszlop maximum), azert van az axis)
+                    ]   #we filter out the given part
+                    output[sample_index, y, x, :] = np.max(input_part, axis=(0, 1)) #we only keep the maximum
+                    #(overall maximum = max(row maximum, column maximum), that's why there's the axis)
         return output
 
-    # a dimension vissza no de csak minden filter altal lefedett reszbol a maximum kaphat gradienst, 
-    # mivel ha azt kuldtuk tovabb, csak az befolyasolhatta a tobbi layert. (a tobbi 0-at kap)
+    # the dimension grows back but only the maximum from the part covered by every filter can get a gradient,
+    # because if we sent that forward, only that could influence the other layers. (the others get 0)
     def backward(self, d_after_activation):
         d_inputs = np.zeros_like(self.inputs)
 
@@ -358,14 +355,14 @@ class MaxPoolLayer:
                         y * self.stride : y * self.stride + self.pool_size[0],
                         x * self.stride : x * self.stride + self.pool_size[1],
                         :
-                    ]   #az eredetibol kiszurjuk azt a reszt, aminek a maximumat kaptuk vissza az elozo layertol
+                    ]   #from the original we filter out the part whose maximum we got back from the previous layer
 
                     max_values = np.max(input_part, axis=(0, 1), keepdims=True)
-                    mask = input_part == max_values #boolean tomb maszk, az alapjan, 
-                    #hogy hol van a max ertek (a keepdims miatt tudjuk osszehasonlitani)
+                    mask = input_part == max_values #boolean array mask, based on
+                    #where the max value is (because of keepdims we can compare)
 
-                    #pthonban lehet booleanokkal szorozni int-et, true = 1, false = 0
-                    #ahol a volt a max ertek ott atengedi a gradienst, mashol lenullazza
+                    #in python you can multiply an int with booleans, true = 1, false = 0
+                    #where the max value was it lets the gradient through, elsewhere it zeroes it out
                     d_inputs[
                         sample_index,
                         y * self.stride : y * self.stride + self.pool_size[0],

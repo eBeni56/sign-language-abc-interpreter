@@ -1,10 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
 
-#lusta voltam mindegyikhez szepen kommentet irni magyarazattal, azt majd megoldom holnap
-#amugyis atbeszeljuk
-#amugy a backward vegul ugyanazt a logikat hasznalta az osszesnel, az updateok csinalnak mast
-#ezert azt innen kiszedtem
 
 class Optimizer(ABC):
     def __init__(self, layer, learning_rate):
@@ -32,7 +28,7 @@ class GradientDescentWithMomentum(Optimizer):
 
         self.beta = beta 
 
-        #ugyanaz shape es dtype mint a suly es bias-gradiensvektoroknak
+        #same shape and dtype as the weight and bias gradient vectors
         #ewma = exponentially weighted moving average
         self.weight_gradients_ewma = np.zeros_like(self.layer.weights)
         self.bias_gradients_ewma = np.zeros_like(self.layer.biases)
@@ -51,24 +47,24 @@ class GradientDescentWithMomentum(Optimizer):
 
 
 
-# #Adaptive Gradient, azaz adaptalja a gradiens erosseget, annak fuggvenyeben hogy mennyire
-# #sokat "haladott" elore egy adott parameter (mennyire nagy frissitesek voltak rajta) 
-# #mig a sima GradientDescent valtozatainal, a learning_rate az csak egyetlen konstans, ami
-# #barmilyen parameterre ugyanaz, itt skalazzuk a learning_rate-t annak fuggvenyeben, hogy
-# #mennyire nagy gradiensek voltak egy adott parameternel (legyen az suly vagy bias)
-# #ezzel megoldodik az hogy pl van egy suly aminek folyton oriasi gradiensei vannak es van egy
-# #bias aminek kicsi gradiensei vannak es igy sokkal inkabb a sulynak megfelelo iranyba haladnank, mivel
-# #a sulynal tortennek a nagyobb frissitesek, mig az adaptive modszerek skalazzak ilyenkor 
-# #a learning_ratet az adott parameternel es sokkal kisebb szorzoja lesz igy ennek
-# #ezzel sokkal egyenesebb ut lesz a minimum fele
+# #Adaptive Gradient, so it adapts the gradient strength, depending on how much
+# #a given parameter has "progressed" (how big the updates on it were)
+# #while at the plain GradientDescent variants, the learning_rate is just a single constant, that is
+# #the same for any parameter, here we scale the learning_rate depending on how
+# #big the gradients were at a given parameter (be it weight or bias)
+# #this solves that e.g. there's a weight that always has huge gradients and there's a
+# #bias that has small gradients and so we'd go much more in the direction of the weight, since
+# #the bigger updates happen at the weight, while the adaptive methods scale
+# #the learning_rate at the given parameter and it gets a much smaller multiplier this way
+# #this makes the path to the minimum much straighter
 class AdaGrad(Optimizer):
     def __init__(self, layer, learning_rate, eps = 1e-8):
         super().__init__(layer, learning_rate)
 
-        #epszilon egy kicsi szam, a 0-val valo osztas elkerulesere szolgal 
+        #epsilon is a small number, it's there to avoid dividing by 0
         self.eps = eps
 
-        # ugyanaz shape es dtype mint a suly es bias-gradiensvektoroknak
+        # same shape and dtype as the weight and bias gradient vectors
         self.weight_gradients_squared_sum = np.zeros_like(self.layer.weights)
         self.bias_gradients_squared_sum = np.zeros_like(self.layer.biases)
 
@@ -92,7 +88,7 @@ class RMSProp(Optimizer):
         self.beta = beta
         self.epsilon = epsilon
 
-        #ugyanaz shape es dtype mint a suly es bias-gradiensvektoroknak
+        #same shape and dtype as the weight and bias gradient vectors
         #exponentially weighted moving average of squared gradients
         self.weight_gradients_squared_ewma = np.zeros_like(self.layer.weights)
         self.bias_gradients_squared_ewma = np.zeros_like(self.layer.biases)
@@ -109,7 +105,7 @@ class RMSProp(Optimizer):
         squared_bias_gradients *= (1 - self.beta)
         self.bias_gradients_squared_ewma += squared_bias_gradients
 
-        #epszilon egy kicsi szam, a 0-val valo osztas elkerulesere szolgal 
+        #epsilon is a small number, it's there to avoid dividing by 0
         weight_denominator = np.sqrt(self.weight_gradients_squared_ewma) + self.epsilon
         bias_denominator = np.sqrt(self.bias_gradients_squared_ewma) + self.epsilon
 
@@ -127,8 +123,8 @@ class Adam(Optimizer):
         self.beta2 = beta2
         self.epsilon = epsilon
 
-        #t az idopillanat, azaz konkretan egy szamlalo hogy hanyadjara tortenik frissites
-        #erre szukseg van a bias correctionnel 
+        #t is the point in time, so basically a counter for which update this is
+        #we need this for the bias correction
         self.t = 0
         
         self.weight_gradients_ewma = np.zeros_like(self.layer.weights) 

@@ -10,8 +10,6 @@ CSV_FILE_PATH = "data/new_data.csv"
 
 training_inputs, training_outputs, testing_inputs, testing_outputs = get_data(CSV_FILE_PATH)
 
-print(training_inputs.shape[0])
-
 number_of_classes = training_outputs[0].shape[0] 
 
 my_neural_network = Neural_Network(

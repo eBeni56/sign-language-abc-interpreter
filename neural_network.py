@@ -2,14 +2,13 @@ import numpy as np
 import optimizer as optimizer_module
 from loss_function import LossFunction, CategorialCrossEntropy
 from activation_function import SoftMax
-from loss_function import LossFunction
 import layer as layer_module
 import time 
 
-class Neural_Network:                            #a trainbe amugy jo volt, csak azert szedtem ki onnan, mert csak siman atadta tobb fuggvenynek, de csak az optimizer hasznalta
-    def __init__(self, layers: np.array, loss_function: LossFunction, optimizer: str = "gradient_descent", learning_rate = 0.001):
+class Neural_Network:
+    def __init__(self, layers: list, loss_function: LossFunction, optimizer: str = "gradient_descent", learning_rate = 0.001):
         
-        # figyelmeztetes h a SoftMax csak CategorialCrossEntropy-val mukodik egyutt, h ne faileljen csendesen a hatterben
+        # warning that SoftMax only works together with CategorialCrossEntropy, so it doesn't fail silently in the background
         if type(layers[-1].activation) == SoftMax and type(loss_function) != CategorialCrossEntropy:
             raise ValueError("SoftMax can only be used with CategorialCrossEntropy") 
 
@@ -28,8 +27,6 @@ class Neural_Network:                            #a trainbe amugy jo volt, csak 
                 continue
 
             match self.optimizer:
-                #!!! EGYELORE be vannak hardcodeolva az optimizerek parameterei, jobb lenne atadni
-                #maga egy optimizer peldanyt, hogy a felhasznalo adhassa meg a parametereket
                 case "gradient_descent":
                     layer.initialize_optimizer(optimizer_module.GradientDescent(layer, self.learning_rate))
 
@@ -64,25 +61,25 @@ class Neural_Network:                            #a trainbe amugy jo volt, csak 
         output_layer = self.layers[-1]
         
         if type(output_layer.activation) == SoftMax and type(self.loss_function) == CategorialCrossEntropy:
-            # a softmax derivaltjanak eredmenye egy Jacobi matrix, de amikor categorial cross entropyval van tarsitva
-            # nagyon leegyszerusodik, igy kiszamitjuk itt egybol a d_before_activationt 
-            # ∂Loss/∂z = ∂Loss/∂a * ∂a/∂z azaz loss function derivaltja * activation function derivaltja
-            # ennek az eredmenye a softmax + categorial cross entropy kombinacional: prediction - target 
+            # the derivative of softmax is a Jacobian matrix, but when it's paired with categorial cross entropy
+            # it simplifies a lot, so we calculate the d_before_activation right here
+            # ∂Loss/∂z = ∂Loss/∂a * ∂a/∂z so the derivative of the loss function * the derivative of the activation function
+            # the result of this for the softmax + categorial cross entropy combination is: prediction - target
             gradient = predictions - targets  
 
-            # ez konkretan pont ugyanugy ahogy a layer.backward metodusba van, a sulygradiensek es biasgradiensek kiszamitasa
+            # this is exactly the same as in the layer.backward method, calculating the weight gradients and bias gradients
             output_layer.weight_gradients = output_layer.inputs.T @ gradient
             output_layer.bias_gradients = gradient
 
-            # ez konkretan a d_inputs a layer.backward-bol
+            # this is basically the d_inputs from layer.backward
             gradient = gradient @ output_layer.weights.T
         
 
-            # es igy most az utolso elotti layertol folytassuk, az utolsot mar inteztuk
+            # and now let's continue from the second to last layer, the last one is already done
             layers = self.layers[:-1]
         else:
-            # kulonben csak siman mint eddig, csak a loss function derivaltjat szamitjuk ki eloszor
-            # es az utolso layeren is vegig megyunk a for ciklussal
+            # otherwise just like before, we only calculate the derivative of the loss function first
+            # and we go through the last layer as well with the for loop
             gradient = self.loss_function.df(predictions, targets)
             layers = self.layers
 
@@ -100,7 +97,7 @@ class Neural_Network:                            #a trainbe amugy jo volt, csak 
                 layer.optimizer.update()
     
 
-    # a tesztelesi adathalmazot is meglehet adni, hogy latszodjon a train/val loss is, ezzel latszodik ha overfitting tortenik
+    # the testing dataset can also be given, so the train/val loss is visible too, this way we can see if overfitting happens
     def train(self, training_inputs, training_outputs, epochs, batch_size=1, LOG=True, testing_inputs=None, testing_outputs=None): 
         training_sample_count = training_inputs.shape[0]
 
@@ -114,7 +111,7 @@ class Neural_Network:                            #a trainbe amugy jo volt, csak 
         for epoch in range(epochs):
             start = time.perf_counter()
             
-            # osszekeverjuk az adatokat, hogy ne mindig ugyanazok az adatok legyenek egy adott batchben
+            # shuffle the data, so it's not always the same data in a given batch
             indices = np.random.permutation(training_inputs.shape[0])
             training_inputs = training_inputs[indices]
             training_outputs = training_outputs[indices]
@@ -125,7 +122,7 @@ class Neural_Network:                            #a trainbe amugy jo volt, csak 
             for batch_start_index in range(0, training_sample_count, batch_size):
                 batch_end_index = min(batch_start_index + batch_size, training_sample_count)
 
-                # ide gyujtjuk a batch osszes gradienset
+                # we collect all the gradients of the batch here
                 accumulated_weight_gradients = []
                 accumulated_bias_gradients = []
 
@@ -133,9 +130,9 @@ class Neural_Network:                            #a trainbe amugy jo volt, csak 
                 current_batch_size = batch_end_index - batch_start_index
 
                 for sample_index in range(batch_start_index, batch_end_index):
-                    #igy megtartjuk a mintat 2D-ben, nem csak egy sima vektort teritunk vissza.
-                    #a valosagban view-t ad a tombrol es emiatt nem keszul masolat. azert hatekonyabb gyakorlatban
-                    #mintha csak siman becsomagolnank a megfelelo indexet egy np.array()-ba
+                    #this way we keep the sample in 2D, we don't just return a plain vector.
+                    #in reality it gives a view of the array so no copy is made. that's why it's more efficient in practice
+                    #than just wrapping the right index in an np.array()
                     training_input_sample = training_inputs[sample_index:sample_index+1]
                     expected_output_sample = training_outputs[sample_index:sample_index+1]
 
@@ -146,19 +143,19 @@ class Neural_Network:                            #a trainbe amugy jo volt, csak 
 
                     self.back_propagation(prediction, expected_output_sample)
 
-                    #ha ez az elso samplenel a batch-ben, eloszor megadjuk a megfelelo mereteket
+                    #if this is the first sample in the batch, we first set the right sizes
                     if len(accumulated_weight_gradients) == 0:
                         for layer in self.layers:
                             if type(layer) == layer_module.DropoutLayer:
                                 continue
 
-                            #egy ugyan akkora 0-sokkal teli matrixot csatol a zeros_like
+                            #zeros_like attaches a matrix of the same size filled with 0s
                             accumulated_weight_gradients.append(np.zeros_like(layer.weight_gradients))
                             accumulated_bias_gradients.append(np.zeros_like(layer.bias_gradients))
 
                     dropout_layers_till_now = 0 
 
-                    #rendre hozzaadjuk
+                    #we add them one by one
                     for layer_index, layer in enumerate(self.layers):
                         if type(layer) == layer_module.DropoutLayer:
                             dropout_layers_till_now += 1
@@ -172,7 +169,7 @@ class Neural_Network:                            #a trainbe amugy jo volt, csak 
 
                 dropout_layers_till_now = 0 
 
-                #atlagolas batch vegen
+                #averaging at the end of the batch
                 for layer_index, layer in enumerate(self.layers):
                     if type(layer) == layer_module.DropoutLayer:
                         dropout_layers_till_now += 1
@@ -183,7 +180,7 @@ class Neural_Network:                            #a trainbe amugy jo volt, csak 
                     layer.weight_gradients = accumulated_weight_gradients[idx] / current_batch_size
                     layer.bias_gradients = accumulated_bias_gradients[idx] / current_batch_size
                 
-                #csak a batch vegen updatelunk
+                #we only update at the end of the batch
                 self.update_parameters()
 
                 batch_loss /= current_batch_size
